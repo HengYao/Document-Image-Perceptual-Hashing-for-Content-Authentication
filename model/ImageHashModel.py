@@ -10,7 +10,7 @@ class ResNetVit(nn.Module):
 
     def __init__(self, config: HiDDenConfiguration,img_size=256, nodown=True, patch_height=16,
                  patch_width=16, n_class=50, dim=256,
-                 depth=4, heads=8, droupout=0.5):
+                 depth=4, heads=8, droupout=0.1):
         super().__init__()
         self.nodown = nodown
         self.img_size = img_size
@@ -24,11 +24,30 @@ class ResNetVit(nn.Module):
         self.filters = [64, 64, 128, 256, 512]
 
         if self.nodown:
-            self.firstconv = nn.Conv2d(in_channels=3, out_channels=self.filters[0], kernel_size=3, stride=1, padding=0,
+            self.firstconv = nn.Conv2d(in_channels=3, out_channels=self.filters[0], kernel_size=3, stride=1, padding=1,
                                        bias=False)
+            pretrained_conv = self.net.conv1.weight.detach()
+            resized_conv = F.interpolate(
+                pretrained_conv,
+                size=(3, 3),
+                mode="bilinear",
+                align_corners=False,
+            )
+            original_norm = pretrained_conv.flatten(1).norm(
+                dim=1,
+                keepdim=True,
+            )
+            resized_norm = resized_conv.flatten(1).norm(
+                dim=1,
+                keepdim=True,
+            ).clamp_min(1e-12)
+            resized_conv = resized_conv * (
+                original_norm / resized_norm
+            ).view(-1, 1, 1, 1)
+            with torch.no_grad():
+                self.firstconv.weight.copy_(resized_conv)
         else:
-            self.firstconv = nn.Conv2d(in_channels=3, out_channels=self.filters[0], kernel_size=7, stride=2, padding=3,
-                                       bias=False)
+            self.firstconv = self.net.conv1
         self.firstbn = self.net.bn1
         self.firstrelu = self.net.relu
         self.firstmaxpool = self.net.maxpool
@@ -38,6 +57,8 @@ class ResNetVit(nn.Module):
         self.encoder4 = self.net.layer4
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
+         
 
         # --------------------------------------------------------------------------------
         # ----------------------- define transformer parameters --------------------------
