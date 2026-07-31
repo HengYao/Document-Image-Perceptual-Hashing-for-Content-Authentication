@@ -30,7 +30,7 @@ class ResNetVit(nn.Module):
         resnet_weights = (
             Path(__file__).resolve().parent
             / "weights"
-            / "resnet18-f37072fd.pth"
+            / "resnet18.pth"
         )
         self.net.load_state_dict(
             torch.load(
